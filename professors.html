@@ -3,119 +3,124 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Panell Professor - Lacetania</title>
+  <title>Control Professors - Lavabo</title>
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; padding: 1.5rem; background: #f8fafc; margin: 0; }
-    .box { background: white; padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-    .item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
-    button { background: #059669; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-    button.red { background: #dc2626; }
-    .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; background: #fef3c7; color: #92400e; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; margin: 0; padding: 1.5rem; color: #1e293b; }
+    .container { max-width: 600px; margin: auto; }
+    h1 { font-size: 1.5rem; text-align: center; margin-bottom: 1.5rem; }
+    .section { background: white; border-radius: 16px; padding: 1.2rem; margin-bottom: 1.2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .section-title { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; color: #64748b; margin-bottom: 0.8rem; }
+    
+    .card-active { background: #f0fdf4; border: 2px solid #86efac; border-radius: 12px; padding: 1rem; display: flex; justify-content: space-between; align-items: center; }
+    .card-queue { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.8rem 1rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
+    
+    .btn-approve { background: #16a34a; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .btn-force { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+    .badge { background: #e2e8f0; color: #475569; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
   </style>
 </head>
 <body>
-  <h1>Panell Control de l'Aula</h1>
 
-  <div class="box">
-    <h2>Alumne Actualment al Lavabo</h2>
-    <div id="actual-container">Carregant...</div>
-  </div>
+  <div class="container">
+    <h1>👨‍🏫 Panell de Control de l'Aula</h1>
 
-  <div class="box">
-    <h2>Cua d'Espera</h2>
-    <div id="cua-container">Carregant...</div>
+    <div class="section">
+      <div class="section-title">🟢 Actualment al Lavabo</div>
+      <div id="actual-container">Carregant...</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">⏳ Cua d'Espera (FIFO)</div>
+      <div id="cua-container">Carregant...</div>
+    </div>
   </div>
 
   <script type="module">
-	  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-	  import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-	  import { getFirestore, collection, onSnapshot, query, where, orderBy, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-	
-	  // ⚠️ Les teves claus de Firebase
-	  const firebaseConfig = {
-	  apiKey: "AIzaSyCd1b_L2Q7ZYHa3mtfCcBr7wjL_iVZnX-s",
-	  authDomain: "lavabo-lacetania.firebaseapp.com",
-	  projectId: "lavabo-lacetania",
-	  storageBucket: "lavabo-lacetania.firebasestorage.app",
-	  messagingSenderId: "690578428151",
-	  appId: "1:690578428151:web:7eb07f1603f73f6be1c3f2",
-	  measurementId: "G-CS22WHL50T"
-	};
-	
-	  const app = initializeApp(firebaseConfig);
-	  const auth = getAuth(app);
-	  const db = getFirestore(app);
-	  const provider = new GoogleAuthProvider();
-	  provider.setCustomParameters({ hd: "lacetania.cat" });
-	
-	  // Control d'autenticació per al professor
-	  onAuthStateChanged(auth, (user) => {
-		if (user) {
-		  if (!user.email.endsWith("@lacetania.cat")) {
-			alert("Només s'permeten comptes del domini @lacetania.cat");
-			auth.signOut();
-			return;
-		  }
-		  
-		  // Quan l'usuari ja està autenticat, CARREGUEM la consulta a Firestore
-		  carregarDadesPanell();
-		} else {
-		  // Si no està autenticat, forcem l'inici de sessió
-		  signInWithPopup(auth, provider);
-		}
-	  });
-	
-	  function carregarDadesPanell() {
-		const q = query(
-		  collection(db, "sollicituds"),
-		  where("estat", "in", ["en_cua", "autoritzat"]),
-		  orderBy("timestamp", "asc")
-		);
-	
-		onSnapshot(q, (snapshot) => {
-		  const actualContainer = document.getElementById("actual-container");
-		  const cuaContainer = document.getElementById("cua-container");
-	
-		  actualContainer.innerHTML = "";
-		  cuaContainer.innerHTML = "";
-	
-		  let autoritzatTrobat = false;
-	
-		  snapshot.docs.forEach((docSnap, index) => {
-			const d = docSnap.data();
-			const docId = docSnap.id;
-	
-			if (d.estat === "autoritzat") {
-			  autoritzatTrobat = true;
-			  actualContainer.innerHTML = `
-				<div class="item">
-				  <span><strong>${d.nom}</strong> (${d.email})</span>
-				  <button class="red" onclick="finalitzar('${docId}')">Marcar com a retornat</button>
-				</div>
-			  `;
-			} else if (d.estat === "en_cua") {
-			  const accioBtn = (!autoritzatTrobat && index === 0) 
-				? `<button onclick="autoritzar('${docId}')">Donar Pas</button>` 
-				: `<span class="badge">Posició ${index + (autoritzatTrobat ? 0 : 1)}</span>`;
-	
-			  cuaContainer.innerHTML += `
-				<div class="item">
-				  <span>${d.nom}</span>
-				  ${accioBtn}
-				</div>
-			  `;
-			}
-		  });
-	
-		  if (!actualContainer.innerHTML) actualContainer.innerText = "Ningú al lavabo.";
-		  if (!cuaContainer.innerHTML) cuaContainer.innerText = "Llista d'espera buida.";
-		}, (error) => {
-		  console.error("Error de permisos a Firestore:", error);
-		});
-	  }
-	
-	  window.autoritzar = (id) => updateDoc(doc(db, "sollicituds", id), { estat: "autoritzat" });
-	  window.finalitzar = (id) => updateDoc(doc(db, "sollicituds", id), { estat: "finalitzat" });
-	</script>
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getFirestore, collection, onSnapshot, query, where, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCd1b_L2Q7ZYHa3mtfCcBr7wjL_iVZnX-s",
+      authDomain: "lavabo-lacetania.firebaseapp.com",
+      projectId: "lavabo-lacetania",
+      storageBucket: "lavabo-lacetania.firebasestorage.app",
+      messagingSenderId: "690578428151",
+      appId: "1:690578428151:web:7eb07f1603f73f6be1c3f2"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ hd: "lacetania.cat" });
+
+    onAuthStateChanged(auth, (user) => {
+      if (user && user.email.endsWith("@lacetania.cat")) {
+        carregarPanell();
+      } else {
+        signInWithPopup(auth, provider);
+      }
+    });
+
+    function carregarPanell() {
+      const q = query(
+        collection(db, "sollicituds"),
+        where("estat", "in", ["en_cua", "autoritzat"])
+      );
+
+      onSnapshot(q, (snapshot) => {
+        const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        docs.sort((a, b) => (a.timestamp_sollicitud?.seconds || 0) - (b.timestamp_sollicitud?.seconds || 0));
+
+        const actualContainer = document.getElementById("actual-container");
+        const cuaContainer = document.getElementById("cua-container");
+
+        actualContainer.innerHTML = "";
+        cuaContainer.innerHTML = "";
+
+        let autoritzatTrobat = false;
+
+        docs.forEach((d, index) => {
+          if (d.estat === "autoritzat") {
+            autoritzatTrobat = true;
+            actualContainer.innerHTML = `
+              <div class="card-active">
+                <div>
+                  <strong>${d.nom}</strong><br>
+                  <small style="color:#15803d">${d.email}</small>
+                </div>
+                <button class="btn-force" onclick="forcarRetorn('${d.id}')">Marcar Retornat (Forçar)</button>
+              </div>
+            `;
+          } else if (d.estat === "en_cua") {
+            const accioBtn = (!autoritzatTrobat && index === 0) 
+              ? `<button class="btn-approve" onclick="autoritzar('${d.id}')">Donar Pas</button>` 
+              : `<span class="badge">Posició ${index + (autoritzatTrobat ? 0 : 1)}</span>`;
+
+            cuaContainer.innerHTML += `
+              <div class="card-queue">
+                <span><strong>${d.nom}</strong></span>
+                ${accioBtn}
+              </div>
+            `;
+          }
+        });
+
+        if (!actualContainer.innerHTML) actualContainer.innerText = "Ningú al lavabo actualment.";
+        if (!cuaContainer.innerHTML) cuaContainer.innerText = "Sense alumnes a la cua.";
+      });
+    }
+
+    window.autoritzar = (id) => updateDoc(doc(db, "sollicituds", id), { 
+      estat: "autoritzat", 
+      timestamp_autoritzacio: serverTimestamp() 
+    });
+
+    window.forcarRetorn = (id) => updateDoc(doc(db, "sollicituds", id), { 
+      estat: "finalitzat", 
+      timestamp_retorn: serverTimestamp() 
+    });
+  </script>
 </body>
 </html>
