@@ -23,10 +23,10 @@
   </div>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
+	  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+	  import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+	  import { getFirestore, collection, onSnapshot, query, where, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+	  
     // ⚠️ Enganxa AQUÍ les teves claus de Firebase (PAS 4)
     const firebaseConfig = {
 	  apiKey: "AIzaSyCd1b_L2Q7ZYHa3mtfCcBr7wjL_iVZnX-s",
@@ -39,89 +39,86 @@
 	};
 
     const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ hd: "lacetania.cat" });
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ hd: "lacetania.cat" });
 
-    let currentUser = null;
-    let activeDocId = null;
+  let desconnectarEscolta = null;
 
-	onAuthStateChanged(auth, (user) => {
-	  if (user) {
-	    if (!user.email.endsWith("@lacetania.cat")) {
-	      alert("Només s'permeten comptes del domini @lacetania.cat");
-	      auth.signOut();
-	      return;
-	    }
-	    
-	    // REDIRECCIÓ TEMPORAL DE PROVA:
-	    if (user.email === "cap.adjunt@lacetania.cat") {
-	      window.location.href = "professors.html";
-	      return;
-	    }
-	
-	    currentUser = user;
-	    document.getElementById("user-info").innerText = `Hola, ${user.displayName}`;
-	    document.getElementById("app").style.display = "block";
-	    escoltarEstatAlumne();
-	  } else {
-	    document.getElementById("user-info").innerHTML = `<button onclick="login()">Inicia sessió amb Google</button>`;
-	    document.getElementById("app").style.display = "none";
-	  }
-	});
-
-    window.login = () => signInWithPopup(auth, provider);
-
-    window.sollicitarLavabo = async () => {
-      if (activeDocId) {
-        await updateDoc(doc(db, "sollicituds", activeDocId), { estat: "finalitzat" });
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      if (!user.email.endsWith("@lacetania.cat")) {
+        alert("Accés restringit al domini @lacetania.cat");
+        auth.signOut();
         return;
       }
+      
+      // Carreguem les dades només si tenim usuari validat
+      carregarDadesPanell();
+    } else {
+      if (desconnectarEscolta) desconnectarEscolta();
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (e) {
+        console.error("Error durant el login:", e);
+      }
+    }
+  });
 
-      await addDoc(collection(db, "sollicituds"), {
-        uid: currentUser.uid,
-        nom: currentUser.displayName,
-        email: currentUser.email,
-        estat: "en_cua",
-        timestamp: serverTimestamp()
-      });
-    };
+  function carregarDadesPanell() {
+    const q = query(
+      collection(db, "sollicituds"),
+      where("estat", "in", ["en_cua", "autoritzat"])
+    );
 
-    function escoltarEstatAlumne() {
-      const q = query(
-        collection(db, "sollicituds"),
-        where("uid", "==", currentUser.uid),
-        where("estat", "in", ["en_cua", "autoritzat"]),
-        orderBy("timestamp", "asc")
-      );
+    // Guardem el listener per desconnectar-lo si cal
+    desconnectarEscolta = onSnapshot(q, (snapshot) => {
+      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      docs.sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
 
-      onSnapshot(q, (snapshot) => {
-        if (snapshot.empty) {
-          activeDocId = null;
-          document.getElementById("status").innerText = "Pots demanar permís per anar al lavabo.";
-          document.getElementById("status").style.color = "black";
-          document.getElementById("btn-action").innerText = "Sol·licitar Lavabo";
-          document.getElementById("btn-action").disabled = false;
-        } else {
-          const docData = snapshot.docs[0];
-          activeDocId = docData.id;
-          const data = docData.data();
+      const actualContainer = document.getElementById("actual-container");
+      const cuaContainer = document.getElementById("cua-container");
 
-          if (data.estat === "en_cua") {
-            document.getElementById("status").innerText = "Estàs en cua d'espera... Espera el teu torn.";
-            document.getElementById("status").style.color = "#d97706";
-            document.getElementById("btn-action").innerText = "En cua d'espera";
-            document.getElementById("btn-action").disabled = true;
-          } else if (data.estat === "autoritzat") {
-            document.getElementById("status").innerText = "POTS ANAR-HI ARA!";
-            document.getElementById("status").style.color = "#059669";
-            document.getElementById("btn-action").innerText = "He tornat a l'aula";
-            document.getElementById("btn-action").disabled = false;
-          }
+      actualContainer.innerHTML = "";
+      cuaContainer.innerHTML = "";
+
+      let autoritzatTrobat = false;
+
+      docs.forEach((d, index) => {
+        const docId = d.id;
+
+        if (d.estat === "autoritzat") {
+          autoritzatTrobat = true;
+          actualContainer.innerHTML = `
+            <div class="item">
+              <span><strong>${d.nom}</strong> (${d.email})</span>
+              <button class="red" onclick="finalitzar('${docId}')">Marcar com a retornat</button>
+            </div>
+          `;
+        } else if (d.estat === "en_cua") {
+          const accioBtn = (!autoritzatTrobat && index === 0) 
+            ? `<button onclick="autoritzar('${docId}')">Donar Pas</button>` 
+            : `<span class="badge">Posició ${index + (autoritzatTrobat ? 0 : 1)}</span>`;
+
+          cuaContainer.innerHTML += `
+            <div class="item">
+              <span>${d.nom}</span>
+              ${accioBtn}
+            </div>
+          `;
         }
       });
-    }
-  </script>
+
+      if (!actualContainer.innerHTML) actualContainer.innerText = "Ningú al lavabo.";
+      if (!cuaContainer.innerHTML) cuaContainer.innerText = "Llista d'espera buida.";
+    }, (error) => {
+      console.error("Error a Firestore:", error);
+    });
+  }
+
+  window.autoritzar = (id) => updateDoc(doc(db, "sollicituds", id), { estat: "autoritzat" });
+  window.finalitzar = (id) => updateDoc(doc(db, "sollicituds", id), { estat: "finalitzat" });
+</script>
 </body>
 </html>
