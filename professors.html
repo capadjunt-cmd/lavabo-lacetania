@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panell Professor - Lacetania</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; padding: 1.5rem; background: #f8fafc; margin: 0; }
+    .box { background: white; padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #eee; }
+    button { background: #059669; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    button.red { background: #dc2626; }
+    .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; background: #fef3c7; color: #92400e; }
+  </style>
+</head>
+<body>
+  <h1>Panell Control de l'Aula</h1>
+
+  <div class="box">
+    <h2>Alumne Actualment al Lavabo</h2>
+    <div id="actual-container">Carregant...</div>
+  </div>
+
+  <div class="box">
+    <h2>Cua d'Espera</h2>
+    <div id="cua-container">Carregant...</div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, onSnapshot, query, where, orderBy, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // ⚠️ Enganxa AQUÍ les teves claus de Firebase (PAS 4)
+    const firebaseConfig = {
+	  apiKey: "AIzaSyCd1b_L2Q7ZYHa3mtfCcBr7wjL_iVZnX-s",
+	  authDomain: "lavabo-lacetania.firebaseapp.com",
+	  projectId: "lavabo-lacetania",
+	  storageBucket: "lavabo-lacetania.firebasestorage.app",
+	  messagingSenderId: "690578428151",
+	  appId: "1:690578428151:web:7eb07f1603f73f6be1c3f2",
+	  measurementId: "G-CS22WHL50T"
+	};
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const q = query(
+      collection(db, "sollicituds"),
+      where("estat", "in", ["en_cua", "autoritzat"]),
+      orderBy("timestamp", "asc")
+    );
+
+    onSnapshot(q, (snapshot) => {
+      const actualContainer = document.getElementById("actual-container");
+      const cuaContainer = document.getElementById("cua-container");
+
+      actualContainer.innerHTML = "";
+      cuaContainer.innerHTML = "";
+
+      let autoritzatTrobat = false;
+
+      snapshot.docs.forEach((docSnap, index) => {
+        const d = docSnap.data();
+        const docId = docSnap.id;
+
+        if (d.estat === "autoritzat") {
+          autoritzatTrobat = true;
+          actualContainer.innerHTML = `
+            <div class="item">
+              <span><strong>${d.nom}</strong> (${d.email})</span>
+              <button class="red" onclick="finalitzar('${docId}')">Marcar com a retornat</button>
+            </div>
+          `;
+        } else if (d.estat === "en_cua") {
+          const accioBtn = (!autoritzatTrobat && index === 0) 
+            ? `<button onclick="autoritzar('${docId}')">Donar Pas</button>` 
+            : `<span class="badge">Posició ${index + (autoritzatTrobat ? 0 : 1)}</span>`;
+
+          cuaContainer.innerHTML += `
+            <div class="item">
+              <span>${d.nom}</span>
+              ${accioBtn}
+            </div>
+          `;
+        }
+      });
+
+      if (!actualContainer.innerHTML) actualContainer.innerText = "Ningú al lavabo.";
+      if (!cuaContainer.innerHTML) cuaContainer.innerText = "Llista d'espera buida.";
+    });
+
+    window.autoritzar = (id) => updateDoc(doc(db, "sollicituds", id), { estat: "autoritzat" });
+    window.finalitzar = (id) => updateDoc(doc(db, "sollicituds", id), { estat: "finalitzat" });
+  </script>
+</body>
+</html>

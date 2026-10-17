@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestió Lavabo - Lacetania</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; text-align: center; padding: 2rem; background: #f4f6f8; margin: 0; }
+    .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
+    button { background: #0066cc; color: white; border: none; padding: 14px 24px; font-size: 1rem; border-radius: 8px; cursor: pointer; margin-top: 15px; font-weight: bold; width: 100%; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .status { font-size: 1.2rem; font-weight: bold; margin: 20px 0; min-height: 50px; display: flex; align-items: center; justify-content: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Control d'Accés al Lavabo</h2>
+    <div id="user-info">Carregant...</div>
+    <div id="app" style="display:none;">
+      <div id="status" class="status">Premeu el botó per sol·licitar sortida</div>
+      <button id="btn-action" onclick="sollicitarLavabo()">Sol·licitar Lavabo</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // ⚠️ Enganxa AQUÍ les teves claus de Firebase (PAS 4)
+    const firebaseConfig = {
+	  apiKey: "AIzaSyCd1b_L2Q7ZYHa3mtfCcBr7wjL_iVZnX-s",
+	  authDomain: "lavabo-lacetania.firebaseapp.com",
+	  projectId: "lavabo-lacetania",
+	  storageBucket: "lavabo-lacetania.firebasestorage.app",
+	  messagingSenderId: "690578428151",
+	  appId: "1:690578428151:web:7eb07f1603f73f6be1c3f2",
+	  measurementId: "G-CS22WHL50T"
+	};
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ hd: "lacetania.cat" });
+
+    let currentUser = null;
+    let activeDocId = null;
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        if (!user.email.endsWith("@lacetania.cat")) {
+          alert("Només s'permeten comptes del domini @lacetania.cat");
+          auth.signOut();
+          return;
+        }
+        currentUser = user;
+        document.getElementById("user-info").innerText = `Hola, ${user.displayName}`;
+        document.getElementById("app").style.display = "block";
+        escoltarEstatAlumne();
+      } else {
+        document.getElementById("user-info").innerHTML = `<button onclick="login()">Inicia sessió amb Google</button>`;
+        document.getElementById("app").style.display = "none";
+      }
+    });
+
+    window.login = () => signInWithPopup(auth, provider);
+
+    window.sollicitarLavabo = async () => {
+      if (activeDocId) {
+        await updateDoc(doc(db, "sollicituds", activeDocId), { estat: "finalitzat" });
+        return;
+      }
+
+      await addDoc(collection(db, "sollicituds"), {
+        uid: currentUser.uid,
+        nom: currentUser.displayName,
+        email: currentUser.email,
+        estat: "en_cua",
+        timestamp: serverTimestamp()
+      });
+    };
+
+    function escoltarEstatAlumne() {
+      const q = query(
+        collection(db, "sollicituds"),
+        where("uid", "==", currentUser.uid),
+        where("estat", "in", ["en_cua", "autoritzat"]),
+        orderBy("timestamp", "asc")
+      );
+
+      onSnapshot(q, (snapshot) => {
+        if (snapshot.empty) {
+          activeDocId = null;
+          document.getElementById("status").innerText = "Pots demanar permís per anar al lavabo.";
+          document.getElementById("status").style.color = "black";
+          document.getElementById("btn-action").innerText = "Sol·licitar Lavabo";
+          document.getElementById("btn-action").disabled = false;
+        } else {
+          const docData = snapshot.docs[0];
+          activeDocId = docData.id;
+          const data = docData.data();
+
+          if (data.estat === "en_cua") {
+            document.getElementById("status").innerText = "Estàs en cua d'espera... Espera el teu torn.";
+            document.getElementById("status").style.color = "#d97706";
+            document.getElementById("btn-action").innerText = "En cua d'espera";
+            document.getElementById("btn-action").disabled = true;
+          } else if (data.estat === "autoritzat") {
+            document.getElementById("status").innerText = "POTS ANAR-HI ARA!";
+            document.getElementById("status").style.color = "#059669";
+            document.getElementById("btn-action").innerText = "He tornat a l'aula";
+            document.getElementById("btn-action").disabled = false;
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
