@@ -9,7 +9,8 @@
     .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
     button { background: #0066cc; color: white; border: none; padding: 14px 24px; font-size: 1rem; border-radius: 8px; cursor: pointer; margin-top: 15px; font-weight: bold; width: 100%; }
     button:disabled { background: #ccc; cursor: not-allowed; }
-    .status { font-size: 1.2rem; font-weight: bold; margin: 20px 0; min-height: 50px; display: flex; align-items: center; justify-content: center; }
+    .btn-logout { background: #e74c3c; margin-top: 10px; font-size: 0.85rem; padding: 8px 12px; }
+    .status { font-size: 1.1rem; font-weight: bold; margin: 20px 0; min-height: 50px; display: flex; align-items: center; justify-content: center; line-height: 1.4; }
   </style>
 </head>
 <body>
@@ -17,108 +18,113 @@
     <h2>Control d'Accés al Lavabo</h2>
     <div id="user-info">Carregant...</div>
     <div id="app" style="display:none;">
-      <div id="status" class="status">Premeu el botó per sol·licitar sortida</div>
+      <div id="status" class="status">Premeu el botó per sol·licitar sortida.</div>
       <button id="btn-action" onclick="sollicitarLavabo()">Sol·licitar Lavabo</button>
+      <button class="btn-logout" onclick="logout()">Tancar Sessió</button>
     </div>
   </div>
 
   <script type="module">
-	  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-	  import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-	  import { getFirestore, collection, onSnapshot, query, where, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-	  
-    // ⚠️ Enganxa AQUÍ les teves claus de Firebase (PAS 4)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, serverTimestamp, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
     const firebaseConfig = {
-	  apiKey: "AIzaSyCd1b_L2Q7ZYHa3mtfCcBr7wjL_iVZnX-s",
-	  authDomain: "lavabo-lacetania.firebaseapp.com",
-	  projectId: "lavabo-lacetania",
-	  storageBucket: "lavabo-lacetania.firebasestorage.app",
-	  messagingSenderId: "690578428151",
-	  appId: "1:690578428151:web:7eb07f1603f73f6be1c3f2",
-	  measurementId: "G-CS22WHL50T"
-	};
+      apiKey: "AIzaSyCd1b_L2Q7ZYHa3mtfCcBr7wjL_iVZnX-s",
+      authDomain: "lavabo-lacetania.firebaseapp.com",
+      projectId: "lavabo-lacetania",
+      storageBucket: "lavabo-lacetania.firebasestorage.app",
+      messagingSenderId: "690578428151",
+      appId: "1:690578428151:web:7eb07f1603f73f6be1c3f2",
+      measurementId: "G-CS22WHL50T"
+    };
 
     const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ hd: "lacetania.cat" });
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ hd: "lacetania.cat" });
 
-  let desconnectarEscolta = null;
+    let currentUser = null;
+    let desconnectarEscolta = null;
 
-  onAuthStateChanged(auth, async (user) => {
-    if (user) {
-      if (!user.email.endsWith("@lacetania.cat")) {
-        alert("Accés restringit al domini @lacetania.cat");
-        auth.signOut();
-        return;
-      }
-      
-      // Carreguem les dades només si tenim usuari validat
-      carregarDadesPanell();
-    } else {
-      if (desconnectarEscolta) desconnectarEscolta();
-      try {
-        await signInWithPopup(auth, provider);
-      } catch (e) {
-        console.error("Error durant el login:", e);
-      }
-    }
-  });
-
-  function carregarDadesPanell() {
-    const q = query(
-      collection(db, "sollicituds"),
-      where("estat", "in", ["en_cua", "autoritzat"])
-    );
-
-    // Guardem el listener per desconnectar-lo si cal
-    desconnectarEscolta = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      docs.sort((a, b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
-
-      const actualContainer = document.getElementById("actual-container");
-      const cuaContainer = document.getElementById("cua-container");
-
-      actualContainer.innerHTML = "";
-      cuaContainer.innerHTML = "";
-
-      let autoritzatTrobat = false;
-
-      docs.forEach((d, index) => {
-        const docId = d.id;
-
-        if (d.estat === "autoritzat") {
-          autoritzatTrobat = true;
-          actualContainer.innerHTML = `
-            <div class="item">
-              <span><strong>${d.nom}</strong> (${d.email})</span>
-              <button class="red" onclick="finalitzar('${docId}')">Marcar com a retornat</button>
-            </div>
-          `;
-        } else if (d.estat === "en_cua") {
-          const accioBtn = (!autoritzatTrobat && index === 0) 
-            ? `<button onclick="autoritzar('${docId}')">Donar Pas</button>` 
-            : `<span class="badge">Posició ${index + (autoritzatTrobat ? 0 : 1)}</span>`;
-
-          cuaContainer.innerHTML += `
-            <div class="item">
-              <span>${d.nom}</span>
-              ${accioBtn}
-            </div>
-          `;
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        if (!user.email.endsWith("@lacetania.cat")) {
+          alert("Accés restringit al domini @lacetania.cat");
+          auth.signOut();
+          return;
         }
-      });
 
-      if (!actualContainer.innerHTML) actualContainer.innerText = "Ningú al lavabo.";
-      if (!cuaContainer.innerHTML) cuaContainer.innerText = "Llista d'espera buida.";
-    }, (error) => {
-      console.error("Error a Firestore:", error);
+        // Redirecció automàtica temporal si entra el cap d'estudis/professor
+        if (user.email === "cap.adjunt@lacetania.cat") {
+          window.location.href = "professors.html";
+          return;
+        }
+
+        currentUser = user;
+        document.getElementById("user-info").innerText = `Hola, ${user.displayName}`;
+        document.getElementById("app").style.display = "block";
+        escoltarEstatAlumne();
+      } else {
+        currentUser = null;
+        if (desconnectarEscolta) desconnectarEscolta();
+        document.getElementById("user-info").innerHTML = `<button onclick="login()">Inicia sessió amb Google</button>`;
+        document.getElementById("app").style.display = "none";
+      }
     });
-  }
 
-  window.autoritzar = (id) => updateDoc(doc(db, "sollicituds", id), { estat: "autoritzat" });
-  window.finalitzar = (id) => updateDoc(doc(db, "sollicituds", id), { estat: "finalitzat" });
-</script>
+    window.login = () => signInWithPopup(auth, provider).catch(e => console.error(e));
+    window.logout = () => signOut(auth);
+
+    window.sollicitarLavabo = async () => {
+      if (!currentUser) return;
+      const btn = document.getElementById("btn-action");
+      btn.disabled = true;
+
+      try {
+        await addDoc(collection(db, "sollicituds"), {
+          uid: currentUser.uid,
+          nom: currentUser.displayName,
+          email: currentUser.email,
+          estat: "en_cua",
+          timestamp: serverTimestamp()
+        });
+      } catch (error) {
+        console.error("Error en sol·licitar lavabo:", error);
+        alert("S'ha produït un error en enviar la sol·licitud.");
+        btn.disabled = false;
+      }
+    };
+
+    function escoltarEstatAlumne() {
+      const q = query(
+        collection(db, "sollicituds"),
+        where("uid", "==", currentUser.uid),
+        where("estat", "in", ["en_cua", "autoritzat"])
+      );
+
+      desconnectarEscolta = onSnapshot(q, (snapshot) => {
+        const btn = document.getElementById("btn-action");
+        const statusText = document.getElementById("status");
+
+        if (!snapshot.empty) {
+          const docData = snapshot.docs[0].data();
+          btn.disabled = true;
+
+          if (docData.estat === "autoritzat") {
+            statusText.innerHTML = "🟢 <span style='color:green;'>Tens permís! Pots anar al lavabo.</span>";
+          } else {
+            statusText.innerHTML = "⏳ <span style='color:#d35400;'>Ja estàs a la cua d'espera. Espera que el professor et doni pas.</span>";
+          }
+        } else {
+          btn.disabled = false;
+          statusText.innerText = "Premeu el botó per sol·licitar sortida.";
+        }
+      }, (error) => {
+        console.error("Error escoltant estat alumne:", error);
+      });
+    }
+  </script>
 </body>
 </html>
