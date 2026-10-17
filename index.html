@@ -47,22 +47,29 @@
     let currentUser = null;
     let activeDocId = null;
 
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        if (!user.email.endsWith("@lacetania.cat")) {
-          alert("Només s'permeten comptes del domini @lacetania.cat");
-          auth.signOut();
-          return;
-        }
-        currentUser = user;
-        document.getElementById("user-info").innerText = `Hola, ${user.displayName}`;
-        document.getElementById("app").style.display = "block";
-        escoltarEstatAlumne();
-      } else {
-        document.getElementById("user-info").innerHTML = `<button onclick="login()">Inicia sessió amb Google</button>`;
-        document.getElementById("app").style.display = "none";
-      }
-    });
+	onAuthStateChanged(auth, (user) => {
+	  if (user) {
+	    if (!user.email.endsWith("@lacetania.cat")) {
+	      alert("Només s'permeten comptes del domini @lacetania.cat");
+	      auth.signOut();
+	      return;
+	    }
+	    
+	    // REDIRECCIÓ TEMPORAL DE PROVA:
+	    if (user.email === "cap.adjunt@lacetania.cat") {
+	      window.location.href = "professors.html";
+	      return;
+	    }
+	
+	    currentUser = user;
+	    document.getElementById("user-info").innerText = `Hola, ${user.displayName}`;
+	    document.getElementById("app").style.display = "block";
+	    escoltarEstatAlumne();
+	  } else {
+	    document.getElementById("user-info").innerHTML = `<button onclick="login()">Inicia sessió amb Google</button>`;
+	    document.getElementById("app").style.display = "none";
+	  }
+	});
 
     window.login = () => signInWithPopup(auth, provider);
 
