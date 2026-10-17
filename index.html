@@ -2,24 +2,46 @@
 <html lang="ca">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gestió Lavabo - Lacetania</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Lavabo Lacetania</title>
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; text-align: center; padding: 2rem; background: #f4f6f8; margin: 0; }
-    .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
-    button { background: #0066cc; color: white; border: none; padding: 14px 24px; font-size: 1rem; border-radius: 8px; cursor: pointer; margin-top: 15px; font-weight: bold; width: 100%; }
-    button:disabled { background: #ccc; cursor: not-allowed; }
-    .btn-logout { background: #e74c3c; margin-top: 10px; font-size: 0.85rem; padding: 8px 12px; }
-    .status { font-size: 1.1rem; font-weight: bold; margin: 20px 0; min-height: 50px; display: flex; align-items: center; justify-content: center; line-height: 1.4; }
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; margin: 0; padding: 1rem; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    .card { background: white; border-radius: 20px; padding: 1.8rem; width: 100%; max-width: 380px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); text-align: center; }
+    h2 { font-size: 1.4rem; color: #1a1a1a; margin-top: 0; margin-bottom: 0.5rem; }
+    .user-badge { background: #eef2f7; border-radius: 12px; padding: 8px 12px; font-size: 0.85rem; color: #4a5568; margin-bottom: 1.5rem; display: inline-block; font-weight: 500; }
+    
+    .status-box { border-radius: 16px; padding: 1.5rem; margin: 1rem 0; font-weight: 600; font-size: 1.1rem; line-height: 1.4; transition: all 0.3s ease; }
+    .status-idle { background: #f8fafc; color: #64748b; border: 2px dashed #cbd5e1; }
+    .status-queue { background: #fff7ed; color: #c2410c; border: 2px solid #ffedd5; }
+    .status-active { background: #f0fdf4; color: #15803d; border: 2px solid #bbf7d0; animation: pulse 2s infinite; }
+    
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+      70% { box-shadow: 0 0 0 12px rgba(34, 197, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+
+    button { width: 100%; border: none; padding: 16px; font-size: 1rem; border-radius: 14px; font-weight: 700; cursor: pointer; transition: transform 0.1s, background-color 0.2s; margin-top: 10px; }
+    button:active { transform: scale(0.98); }
+    .btn-main { background: #2563eb; color: white; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+    .btn-return { background: #16a34a; color: white; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3); }
+    .btn-logout { background: transparent; color: #94a3b8; font-size: 0.85rem; padding: 8px; margin-top: 1rem; font-weight: 500; }
   </style>
 </head>
 <body>
+
   <div class="card">
-    <h2>Control d'Accés al Lavabo</h2>
-    <div id="user-info">Carregant...</div>
+    <h2>🚪 Gestió del Lavabo</h2>
+    <div id="user-info" class="user-badge">Carregant...</div>
+
     <div id="app" style="display:none;">
-      <div id="status" class="status">Premeu el botó per sol·licitar sortida.</div>
-      <button id="btn-action" onclick="sollicitarLavabo()">Sol·licitar Lavabo</button>
+      <div id="status-container" class="status-box status-idle">
+        Carregant estat...
+      </div>
+
+      <div id="action-area"></div>
+
       <button class="btn-logout" onclick="logout()">Tancar Sessió</button>
     </div>
   </div>
@@ -27,7 +49,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getFirestore, collection, addDoc, serverTimestamp, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, serverTimestamp, query, where, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCd1b_L2Q7ZYHa3mtfCcBr7wjL_iVZnX-s",
@@ -35,8 +57,7 @@
       projectId: "lavabo-lacetania",
       storageBucket: "lavabo-lacetania.firebasestorage.app",
       messagingSenderId: "690578428151",
-      appId: "1:690578428151:web:7eb07f1603f73f6be1c3f2",
-      measurementId: "G-CS22WHL50T"
+      appId: "1:690578428151:web:7eb07f1603f73f6be1c3f2"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -46,7 +67,7 @@
     provider.setCustomParameters({ hd: "lacetania.cat" });
 
     let currentUser = null;
-    let desconnectarEscolta = null;
+    let currentDocId = null;
 
     onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -56,44 +77,54 @@
           return;
         }
 
-        // Redirecció automàtica temporal si entra el cap d'estudis/professor
         if (user.email === "cap.adjunt@lacetania.cat") {
           window.location.href = "professors.html";
           return;
         }
 
         currentUser = user;
-        document.getElementById("user-info").innerText = `Hola, ${user.displayName}`;
+        document.getElementById("user-info").innerText = user.displayName;
         document.getElementById("app").style.display = "block";
         escoltarEstatAlumne();
       } else {
         currentUser = null;
-        if (desconnectarEscolta) desconnectarEscolta();
-        document.getElementById("user-info").innerHTML = `<button onclick="login()">Inicia sessió amb Google</button>`;
-        document.getElementById("app").style.display = "none";
+        document.getElementById("user-info").innerText = "Sessió no iniciada";
+        document.getElementById("app").style.display = "block";
+        document.getElementById("status-container").className = "status-box status-idle";
+        document.getElementById("status-container").innerText = "Inicia sessió per continuar";
+        document.getElementById("action-area").innerHTML = `<button class="btn-main" onclick="login()">Inicia sessió amb Google</button>`;
       }
     });
 
-    window.login = () => signInWithPopup(auth, provider).catch(e => console.error(e));
+    window.login = () => signInWithPopup(auth, provider);
     window.logout = () => signOut(auth);
 
     window.sollicitarLavabo = async () => {
       if (!currentUser) return;
-      const btn = document.getElementById("btn-action");
-      btn.disabled = true;
-
       try {
         await addDoc(collection(db, "sollicituds"), {
           uid: currentUser.uid,
           nom: currentUser.displayName,
           email: currentUser.email,
           estat: "en_cua",
-          timestamp: serverTimestamp()
+          timestamp_sollicitud: serverTimestamp(),
+          timestamp_autoritzacio: null,
+          timestamp_retorn: null
         });
-      } catch (error) {
-        console.error("Error en sol·licitar lavabo:", error);
-        alert("S'ha produït un error en enviar la sol·licitud.");
-        btn.disabled = false;
+      } catch (e) {
+        alert("Error en sol·licitar el lavabo.");
+      }
+    };
+
+    window.marcarRetornat = async () => {
+      if (!currentDocId) return;
+      try {
+        await updateDoc(doc(db, "sollicituds", currentDocId), {
+          estat: "finalitzat",
+          timestamp_retorn: serverTimestamp()
+        });
+      } catch (e) {
+        alert("Error en registrar el retorn.");
       }
     };
 
@@ -104,25 +135,30 @@
         where("estat", "in", ["en_cua", "autoritzat"])
       );
 
-      desconnectarEscolta = onSnapshot(q, (snapshot) => {
-        const btn = document.getElementById("btn-action");
-        const statusText = document.getElementById("status");
+      onSnapshot(q, (snapshot) => {
+        const box = document.getElementById("status-container");
+        const actionArea = document.getElementById("action-area");
 
         if (!snapshot.empty) {
-          const docData = snapshot.docs[0].data();
-          btn.disabled = true;
+          const docSnap = snapshot.docs[0];
+          currentDocId = docSnap.id;
+          const d = docSnap.data();
 
-          if (docData.estat === "autoritzat") {
-            statusText.innerHTML = "🟢 <span style='color:green;'>Tens permís! Pots anar al lavabo.</span>";
+          if (d.estat === "autoritzat") {
+            box.className = "status-box status-active";
+            box.innerHTML = "🟢 <strong>TENS PERMÍS!</strong><br><small>Ves al lavabo i marca la tornada quan tornis a la classe.</small>";
+            actionArea.innerHTML = `<button class="btn-return" onclick="marcarRetornat()">✅ Ja he tornat a classe</button>`;
           } else {
-            statusText.innerHTML = "⏳ <span style='color:#d35400;'>Ja estàs a la cua d'espera. Espera que el professor et doni pas.</span>";
+            box.className = "status-box status-queue";
+            box.innerHTML = "⏳ <strong>A LA CUA D'ESPERA</strong><br><small>Espera que el professor t'autoritzi la sortida.</small>";
+            actionArea.innerHTML = `<button disabled style="opacity:0.6; cursor:not-allowed;">Sol·licitud enviada...</button>`;
           }
         } else {
-          btn.disabled = false;
-          statusText.innerText = "Premeu el botó per sol·licitar sortida.";
+          currentDocId = null;
+          box.className = "status-box status-idle";
+          box.innerText = "Prem el botó per demanar anar al lavabo.";
+          actionArea.innerHTML = `<button class="btn-main" onclick="sollicitarLavabo()">🧻 Sol·licitar Lavabo</button>`;
         }
-      }, (error) => {
-        console.error("Error escoltant estat alumne:", error);
       });
     }
   </script>
