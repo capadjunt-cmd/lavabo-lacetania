@@ -158,6 +158,7 @@
       });
     }
 
+    // Al clicar "Donar pas", passa directament a "al_lavabo"
     window.autoritzar = (id, lavaboId) => {
       updateDoc(doc(db, "sollicituds", id), { 
         estat: "al_lavabo", 
