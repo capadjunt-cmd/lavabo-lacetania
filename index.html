@@ -110,6 +110,7 @@
           nom: currentUser.displayName,
           email: currentUser.email,
           estat: "en_cua",
+          lavabo_id: null,
           timestamp_sollicitud: serverTimestamp(),
           timestamp_sortida_aula: null,
           timestamp_retorn: null
@@ -132,7 +133,7 @@
       }
     };
 
-    // PAS 3: L'alumne confirma que ha tornat
+    // PAS 3: L'alumne confirma que ha tornat a l'aula
     window.marcarRetornat = async () => {
       if (!currentDocId) return;
       try {
@@ -162,17 +163,14 @@
           const d = docSnap.data();
 
           if (d.estat === "autoritzat") {
-            // El professor ha donat permís -> L'alumne clica per dir que surt
             box.className = "status-box status-approved";
             box.innerHTML = "🔵 <strong>PERMÍS CONCEDIT!</strong><br><small>Clica el botó quan surtis cap al lavabo.</small>";
             actionArea.innerHTML = `<button class="btn-go" onclick="marcarEntradaLavabo()">🚶 Entro al lavabo</button>`;
           } else if (d.estat === "al_lavabo") {
-            // L'alumne ja està al lavabo -> Clica quan torna a l'aula
             box.className = "status-box status-active";
             box.innerHTML = "🟢 <strong>ESTÀS AL LAVABO</strong><br><small>Marca la tornada tan bon punt entris a l'aula.</small>";
             actionArea.innerHTML = `<button class="btn-return" onclick="marcarRetornat()">✅ Ja he tornat a classe</button>`;
           } else {
-            // En cua
             box.className = "status-box status-queue";
             box.innerHTML = "⏳ <strong>A LA CUA D'ESPERA</strong><br><small>Espera que el professor t'autoritzi la sortida.</small>";
             actionArea.innerHTML = `<button disabled style="opacity:0.6; cursor:not-allowed;">Sol·licitud enviada...</button>`;
