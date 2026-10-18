@@ -11,9 +11,10 @@
     h2 { font-size: 1.4rem; color: #1a1a1a; margin-top: 0; margin-bottom: 0.5rem; }
     .user-badge { background: #eef2f7; border-radius: 12px; padding: 8px 12px; font-size: 0.85rem; color: #4a5568; margin-bottom: 1.5rem; display: inline-block; font-weight: 500; }
     
-    .status-box { border-radius: 16px; padding: 1.5rem; margin: 1rem 0; font-weight: 600; font-size: 1.1rem; line-height: 1.4; transition: all 0.3s ease; }
+    .status-box { border-radius: 16px; padding: 1.5rem; margin: 1rem 0; font-weight: 600; font-size: 1.05rem; line-height: 1.4; transition: all 0.3s ease; }
     .status-idle { background: #f8fafc; color: #64748b; border: 2px dashed #cbd5e1; }
     .status-queue { background: #fff7ed; color: #c2410c; border: 2px solid #ffedd5; }
+    .status-approved { background: #eff6ff; color: #1d4ed8; border: 2px solid #bfdbfe; }
     .status-active { background: #f0fdf4; color: #15803d; border: 2px solid #bbf7d0; animation: pulse 2s infinite; }
     
     @keyframes pulse {
@@ -25,6 +26,7 @@
     button { width: 100%; border: none; padding: 16px; font-size: 1rem; border-radius: 14px; font-weight: 700; cursor: pointer; transition: transform 0.1s, background-color 0.2s; margin-top: 10px; }
     button:active { transform: scale(0.98); }
     .btn-main { background: #2563eb; color: white; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+    .btn-go { background: #0284c7; color: white; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3); }
     .btn-return { background: #16a34a; color: white; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3); }
     .btn-logout { background: transparent; color: #94a3b8; font-size: 0.85rem; padding: 8px; margin-top: 1rem; font-weight: 500; }
   </style>
@@ -99,6 +101,7 @@
     window.login = () => signInWithPopup(auth, provider);
     window.logout = () => signOut(auth);
 
+    // PAS 1: Sol·licitar lavabo
     window.sollicitarLavabo = async () => {
       if (!currentUser) return;
       try {
@@ -108,7 +111,7 @@
           email: currentUser.email,
           estat: "en_cua",
           timestamp_sollicitud: serverTimestamp(),
-          timestamp_autoritzacio: null,
+          timestamp_sortida_aula: null,
           timestamp_retorn: null
         });
       } catch (e) {
@@ -116,6 +119,20 @@
       }
     };
 
+    // PAS 2: L'alumne confirma que ix/entra al lavabo
+    window.marcarEntradaLavabo = async () => {
+      if (!currentDocId) return;
+      try {
+        await updateDoc(doc(db, "sollicituds", currentDocId), {
+          estat: "al_lavabo",
+          timestamp_sortida_aula: serverTimestamp()
+        });
+      } catch (e) {
+        alert("Error en registrar la sortida.");
+      }
+    };
+
+    // PAS 3: L'alumne confirma que ha tornat
     window.marcarRetornat = async () => {
       if (!currentDocId) return;
       try {
@@ -132,7 +149,7 @@
       const q = query(
         collection(db, "sollicituds"),
         where("uid", "==", currentUser.uid),
-        where("estat", "in", ["en_cua", "autoritzat"])
+        where("estat", "in", ["en_cua", "autoritzat", "al_lavabo"])
       );
 
       onSnapshot(q, (snapshot) => {
@@ -145,10 +162,17 @@
           const d = docSnap.data();
 
           if (d.estat === "autoritzat") {
+            // El professor ha donat permís -> L'alumne clica per dir que surt
+            box.className = "status-box status-approved";
+            box.innerHTML = "🔵 <strong>PERMÍS CONCEDIT!</strong><br><small>Clica el botó quan surtis cap al lavabo.</small>";
+            actionArea.innerHTML = `<button class="btn-go" onclick="marcarEntradaLavabo()">🚶 Entro al lavabo</button>`;
+          } else if (d.estat === "al_lavabo") {
+            // L'alumne ja està al lavabo -> Clica quan torna a l'aula
             box.className = "status-box status-active";
-            box.innerHTML = "🟢 <strong>TENS PERMÍS!</strong><br><small>Ves al lavabo i marca la tornada quan tornis a la classe.</small>";
+            box.innerHTML = "🟢 <strong>ESTÀS AL LAVABO</strong><br><small>Marca la tornada tan bon punt entris a l'aula.</small>";
             actionArea.innerHTML = `<button class="btn-return" onclick="marcarRetornat()">✅ Ja he tornat a classe</button>`;
           } else {
+            // En cua
             box.className = "status-box status-queue";
             box.innerHTML = "⏳ <strong>A LA CUA D'ESPERA</strong><br><small>Espera que el professor t'autoritzi la sortida.</small>";
             actionArea.innerHTML = `<button disabled style="opacity:0.6; cursor:not-allowed;">Sol·licitud enviada...</button>`;
