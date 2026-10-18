@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Històric d'Auditoria - Lavabo Lacetania</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; margin: 0; padding: 1.5rem; color: #1e293b; }
+    .container { max-width: 900px; margin: auto; }
+    h1 { font-size: 1.6rem; color: #0f172a; margin-bottom: 0.5rem; }
+    p { color: #64748b; margin-top: 0; margin-bottom: 1.5rem; }
+    
+    .stats-bar { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+    .stat-card { background: white; border-radius: 12px; padding: 1rem; flex: 1; box-shadow: 0 4px 12px rgba(0,0,0,0.05); text-align: center; }
+    .stat-number { font-size: 1.8rem; font-weight: 800; color: #2563eb; }
+    .stat-label { font-size: 0.8rem; color: #64748b; text-transform: uppercase; font-weight: 700; margin-top: 4px; }
+
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; }
+    th { background: #f1f5f9; font-weight: 700; color: #475569; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+    tr:last-child td { border-bottom: none; }
+    
+    .badge-time { padding: 4px 8px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; display: inline-block; }
+    .time-normal { background: #dcfce7; color: #15803d; }
+    .time-warning { background: #fef3c7; color: #b45309; }
+    .time-alert { background: #fee2e2; color: #b91c1c; }
+    
+    .btn-back { display: inline-block; margin-bottom: 1rem; color: #2563eb; text-decoration: none; font-weight: 600; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <a href="professors.html" class="btn-back">← Torna al panell de control</a>
+    <h1>📊 Històric i Auditoria de Sortides</h1>
+    <p>Registre cronològic complet de temps de sortida dels alumnes.</p>
+
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div id="stat-total" class="stat-number">0</div>
+        <div class="stat-label">Sortides Totals</div>
+      </div>
+      <div class="stat-card">
+        <div id="stat-mitjana" class="stat-number">0 min</div>
+        <div class="stat-label">Temps Mitjà</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Alumne</th>
+          <th>Lavabo</th>
+          <th>Hora Sortida</th>
+          <th>Hora Retorn</th>
+          <th>Durada Total</th>
+        </tr>
+      </thead>
+      <tbody id="taula-body">
+        <tr><td colspan="5" style="text-align:center;">Carregant dades d'auditoria...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getFirestore, collection, onSnapshot, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCd1b_L2Q7ZYHa3mtfCcBr7wjL_iVZnX-s",
+      authDomain: "lavabo-lacetania.firebaseapp.com",
+      projectId: "lavabo-lacetania",
+      storageBucket: "lavabo-lacetania.firebasestorage.app",
+      messagingSenderId: "690578428151",
+      appId: "1:690578428151:web:7eb07f1603f73f6be1c3f2"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ hd: "lacetania.cat" });
+
+    onAuthStateChanged(auth, (user) => {
+      if (user && user.email.endsWith("@lacetania.cat")) {
+        carregarAuditoria();
+      } else {
+        signInWithPopup(auth, provider);
+      }
+    });
+
+    function carregarAuditoria() {
+      const q = query(
+        collection(db, "sollicituds"),
+        where("estat", "==", "finalitzat")
+      );
+
+      onSnapshot(q, (snapshot) => {
+        const tbody = document.getElementById("taula-body");
+        tbody.innerHTML = "";
+
+        const docs = snapshot.docs.map(d => d.data());
+        // Ordenem per la data de la sol·licitud més recent primer
+        docs.sort((a, b) => (b.timestamp_sollicitud?.seconds || 0) - (a.timestamp_sollicitud?.seconds || 0));
+
+        let tempsTotalSegons = 0;
+        let comptadorValids = 0;
+
+        if (docs.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">No hi ha registres finalitzats encara.</td></tr>`;
+          return;
+        }
+
+        docs.forEach(d => {
+          const inici = d.timestamp_autoritzacio?.toDate();
+          const fi = d.timestamp_retorn?.toDate();
+
+          let duradaText = "N/D";
+          let badgeClass = "time-normal";
+
+          if (inici && fi) {
+            const diferenciaSegons = Math.floor((fi - inici) / 1000);
+            const minuts = Math.floor(diferenciaSegons / 60);
+            const segons = diferenciaSegons % 60;
+            
+            duradaText = `${minuts} min ${segons} s`;
+            tempsTotalSegons += diferenciaSegons;
+            comptadorValids++;
+
+            if (minuts >= 10) badgeClass = "time-alert";
+            else if (minuts >= 5) badgeClass = "time-warning";
+          }
+
+          const horaInici = inici ? inici.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
+          const horaFi = fi ? fi.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
+          const lavaboNom = d.lavabo_id ? d.lavabo_id.replace("lavabo_", "").replace("_", " ") : "General";
+
+          tbody.innerHTML += `
+            <tr>
+              <td><strong>${d.nom}</strong><br><small style="color:#64748b;">${d.email}</small></td>
+              <td style="text-transform:capitalize;">${lavaboNom}</td>
+              <td>${horaInici}</td>
+              <td>${horaFi}</td>
+              <td><span class="badge-time ${badgeClass}">${duradaText}</span></td>
+            </tr>
+          `;
+        });
+
+        // Actualitzar estadístiques globals
+        document.getElementById("stat-total").innerText = docs.length;
+        if (comptadorValids > 0) {
+          const mitjanaMinuts = Math.round((tempsTotalSegons / comptadorValids) / 60);
+          document.getElementById("stat-mitjana").innerText = `${mitjanaMinuts} min`;
+        }
+      });
+    }
+  </script>
+</body>
+</html>
