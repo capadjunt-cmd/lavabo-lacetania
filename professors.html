@@ -22,7 +22,6 @@
     .card-queue { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.8rem 1rem; margin-bottom: 0.6rem; display: flex; justify-content: space-between; align-items: center; }
     
     .btn-approve { background: #16a34a; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
-    .btn-approve:disabled { background: #cbd5e1; cursor: not-allowed; }
     .btn-force { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
     .badge-queue { background: #f1f5f9; color: #64748b; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
     .empty-msg { color: #94a3b8; font-size: 0.95rem; text-align: center; padding: 1rem 0; font-style: italic; }
@@ -44,7 +43,7 @@
 
     <div class="section">
       <div class="section-header">
-        <span class="section-title">🟢 Ocupació Actual</span>
+        <span class="section-title">🟢 Actualment al Lavabo</span>
         <span id="capacity-indicator" class="capacity-badge">0 / 2 Ocupats</span>
       </div>
       <div id="actual-container">Carregant...</div>
@@ -100,7 +99,7 @@
 
       const q = query(
         collection(db, "sollicituds"),
-        where("estat", "in", ["en_cua", "autoritzat", "al_lavabo"])
+        where("estat", "in", ["en_cua", "al_lavabo"])
       );
 
       desconnectarEscolta = onSnapshot(q, (snapshot) => {
@@ -114,23 +113,20 @@
         actualContainer.innerHTML = "";
         cuaContainer.innerHTML = "";
 
-        // Filtrem els que ocupen actualment aquest lavabo concret
-        const ocupatsAquestLavabo = docs.filter(d => (d.estat === "autoritzat" || d.estat === "al_lavabo") && d.lavabo_id === lavaboId);
+        const ocupatsAquestLavabo = docs.filter(d => d.estat === "al_lavabo" && d.lavabo_id === lavaboId);
         const numOcupats = ocupatsAquestLavabo.length;
 
         capacityIndicator.innerText = `${numOcupats} / ${capacitatMaxima} Ocupats`;
         capacityIndicator.style.background = numOcupats >= capacitatMaxima ? "#fee2e2" : "#e0f2fe";
         capacityIndicator.style.color = numOcupats >= capacitatMaxima ? "#991b1b" : "#0369a1";
 
-        // Dibuixar alumnes actuals al lavabo
         if (numOcupats > 0) {
           ocupatsAquestLavabo.forEach(d => {
-            const estatText = d.estat === "al_lavabo" ? "🟢 Al lavabo" : "🔵 En camí (Permís donat)";
             actualContainer.innerHTML += `
               <div class="card-active">
                 <div>
                   <strong>${d.nom}</strong><br>
-                  <small style="color:#15803d; font-weight:600;">${estatText}</small>
+                  <small style="color:#15803d; font-weight:600;">🟢 Al lavabo</small>
                 </div>
                 <button class="btn-force" onclick="forcarRetorn('${d.id}')">Forçar Retorn</button>
               </div>
@@ -140,7 +136,6 @@
           actualContainer.innerHTML = `<div class="empty-msg">Ningú al lavabo actualment.</div>`;
         }
 
-        // Dibuixar la cua d'espera global
         const enCua = docs.filter(d => d.estat === "en_cua");
         
         if (enCua.length > 0) {
@@ -165,7 +160,7 @@
 
     window.autoritzar = (id, lavaboId) => {
       updateDoc(doc(db, "sollicituds", id), { 
-        estat: "autoritzat", 
+        estat: "al_lavabo", 
         lavabo_id: lavaboId,
         timestamp_autoritzacio: serverTimestamp() 
       });
