@@ -3,34 +3,57 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Control Professors - Lavabo</title>
+  <title>Control Professors - Lavabo Lacetania</title>
   <style>
+    * { box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; margin: 0; padding: 1.5rem; color: #1e293b; }
     .container { max-width: 600px; margin: auto; }
-    h1 { font-size: 1.5rem; text-align: center; margin-bottom: 1.5rem; }
+    h1 { font-size: 1.5rem; text-align: center; margin-bottom: 1rem; color: #0f172a; }
+    
+    .selector-box { background: white; border-radius: 16px; padding: 1.2rem; margin-bottom: 1.2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); text-align: center; }
+    select { width: 100%; padding: 12px; font-size: 1rem; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-weight: 600; color: #334155; margin-top: 8px; }
+    
     .section { background: white; border-radius: 16px; padding: 1.2rem; margin-bottom: 1.2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    .section-title { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; color: #64748b; margin-bottom: 0.8rem; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .section-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; color: #64748b; }
+    .capacity-badge { background: #e0f2fe; color: #0369a1; padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; }
     
-    .card-active { background: #f0fdf4; border: 2px solid #86efac; border-radius: 12px; padding: 1rem; display: flex; justify-content: space-between; align-items: center; }
-    .card-queue { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.8rem 1rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
+    .card-active { background: #f0fdf4; border: 2px solid #86efac; border-radius: 12px; padding: 1rem; margin-bottom: 0.8rem; display: flex; justify-content: space-between; align-items: center; }
+    .card-queue { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.8rem 1rem; margin-bottom: 0.6rem; display: flex; justify-content: space-between; align-items: center; }
     
-    .btn-approve { background: #16a34a; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; }
-    .btn-force { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
-    .badge { background: #e2e8f0; color: #475569; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
+    .btn-approve { background: #16a34a; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+    .btn-approve:disabled { background: #cbd5e1; cursor: not-allowed; }
+    .btn-force { background: #ef4444; color: white; border: none; padding: 8px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+    .badge-queue { background: #f1f5f9; color: #64748b; font-size: 0.8rem; padding: 4px 8px; border-radius: 6px; font-weight: 600; }
+    .empty-msg { color: #94a3b8; font-size: 0.95rem; text-align: center; padding: 1rem 0; font-style: italic; }
   </style>
 </head>
 <body>
 
   <div class="container">
-    <h1>👨‍🏫 Panell de Control de l'Aula</h1>
+    <h1>👨‍🏫 Control de Lavabos - Lacetania</h1>
+
+    <div class="selector-box">
+      <label for="lavabo-select" style="font-weight:700; font-size:0.9rem; color:#475569;">SELECCIONA EL LAVABO A GESTIONAR:</label>
+      <select id="lavabo-select" onchange="canviarLavabo()">
+        <option value="lavabo_planta_1" data-capacitat="2">Planta 1 (Capacitat: 2 persones)</option>
+        <option value="lavabo_planta_2" data-capacitat="2">Planta 2 (Capacitat: 2 persones)</option>
+        <option value="lavabo_planta_baixa" data-capacitat="1">Planta Baixa (Capacitat: 1 persona)</option>
+      </select>
+    </div>
 
     <div class="section">
-      <div class="section-title">🟢 Actualment al Lavabo</div>
+      <div class="section-header">
+        <span class="section-title">🟢 Ocupació Actual</span>
+        <span id="capacity-indicator" class="capacity-badge">0 / 2 Ocupats</span>
+      </div>
       <div id="actual-container">Carregant...</div>
     </div>
 
     <div class="section">
-      <div class="section-title">⏳ Cua d'Espera (FIFO)</div>
+      <div class="section-header">
+        <span class="section-title">⏳ Cua d'Espera Global (FIFO)</span>
+      </div>
       <div id="cua-container">Carregant...</div>
     </div>
   </div>
@@ -55,6 +78,8 @@
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ hd: "lacetania.cat" });
 
+    let desconnectarEscolta = null;
+
     onAuthStateChanged(auth, (user) => {
       if (user && user.email.endsWith("@lacetania.cat")) {
         carregarPanell();
@@ -63,40 +88,67 @@
       }
     });
 
+    window.canviarLavabo = () => {
+      if (desconnectarEscolta) desconnectarEscolta();
+      carregarPanell();
+    };
+
     function carregarPanell() {
+      const select = document.getElementById("lavabo-select");
+      const lavaboId = select.value;
+      const capacitatMaxima = parseInt(select.options[select.selectedIndex].getAttribute("data-capacitat"));
+
       const q = query(
         collection(db, "sollicituds"),
-        where("estat", "in", ["en_cua", "autoritzat"])
+        where("estat", "in", ["en_cua", "autoritzat", "al_lavabo"])
       );
 
-      onSnapshot(q, (snapshot) => {
+      desconnectarEscolta = onSnapshot(q, (snapshot) => {
         const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         docs.sort((a, b) => (a.timestamp_sollicitud?.seconds || 0) - (b.timestamp_sollicitud?.seconds || 0));
 
         const actualContainer = document.getElementById("actual-container");
         const cuaContainer = document.getElementById("cua-container");
+        const capacityIndicator = document.getElementById("capacity-indicator");
 
         actualContainer.innerHTML = "";
         cuaContainer.innerHTML = "";
 
-        let autoritzatTrobat = false;
+        // Filtrem els que ocupen actualment aquest lavabo concret
+        const ocupatsAquestLavabo = docs.filter(d => (d.estat === "autoritzat" || d.estat === "al_lavabo") && d.lavabo_id === lavaboId);
+        const numOcupats = ocupatsAquestLavabo.length;
 
-        docs.forEach((d, index) => {
-          if (d.estat === "autoritzat") {
-            autoritzatTrobat = true;
-            actualContainer.innerHTML = `
+        capacityIndicator.innerText = `${numOcupats} / ${capacitatMaxima} Ocupats`;
+        capacityIndicator.style.background = numOcupats >= capacitatMaxima ? "#fee2e2" : "#e0f2fe";
+        capacityIndicator.style.color = numOcupats >= capacitatMaxima ? "#991b1b" : "#0369a1";
+
+        // Dibuixar alumnes actuals al lavabo
+        if (numOcupats > 0) {
+          ocupatsAquestLavabo.forEach(d => {
+            const estatText = d.estat === "al_lavabo" ? "🟢 Al lavabo" : "🔵 En camí (Permís donat)";
+            actualContainer.innerHTML += `
               <div class="card-active">
                 <div>
                   <strong>${d.nom}</strong><br>
-                  <small style="color:#15803d">${d.email}</small>
+                  <small style="color:#15803d; font-weight:600;">${estatText}</small>
                 </div>
-                <button class="btn-force" onclick="forcarRetorn('${d.id}')">Marcar Retornat (Forçar)</button>
+                <button class="btn-force" onclick="forcarRetorn('${d.id}')">Forçar Retorn</button>
               </div>
             `;
-          } else if (d.estat === "en_cua") {
-            const accioBtn = (!autoritzatTrobat && index === 0) 
-              ? `<button class="btn-approve" onclick="autoritzar('${d.id}')">Donar Pas</button>` 
-              : `<span class="badge">Posició ${index + (autoritzatTrobat ? 0 : 1)}</span>`;
+          });
+        } else {
+          actualContainer.innerHTML = `<div class="empty-msg">Ningú al lavabo actualment.</div>`;
+        }
+
+        // Dibuixar la cua d'espera global
+        const enCua = docs.filter(d => d.estat === "en_cua");
+        
+        if (enCua.length > 0) {
+          enCua.forEach((d, index) => {
+            const potAutoritzar = numOcupats < capacitatMaxima && index === 0;
+            const accioBtn = potAutoritzar 
+              ? `<button class="btn-approve" onclick="autoritzar('${d.id}', '${lavaboId}')">Donar Pas</button>`
+              : `<span class="badge-queue">Posició ${index + 1}</span>`;
 
             cuaContainer.innerHTML += `
               <div class="card-queue">
@@ -104,23 +156,27 @@
                 ${accioBtn}
               </div>
             `;
-          }
-        });
-
-        if (!actualContainer.innerHTML) actualContainer.innerText = "Ningú al lavabo actualment.";
-        if (!cuaContainer.innerHTML) cuaContainer.innerText = "Sense alumnes a la cua.";
+          });
+        } else {
+          cuaContainer.innerHTML = `<div class="empty-msg">Sense alumnes a la cua d'espera.</div>`;
+        }
       });
     }
 
-    window.autoritzar = (id) => updateDoc(doc(db, "sollicituds", id), { 
-      estat: "autoritzat", 
-      timestamp_autoritzacio: serverTimestamp() 
-    });
+    window.autoritzar = (id, lavaboId) => {
+      updateDoc(doc(db, "sollicituds", id), { 
+        estat: "autoritzat", 
+        lavabo_id: lavaboId,
+        timestamp_autoritzacio: serverTimestamp() 
+      });
+    };
 
-    window.forcarRetorn = (id) => updateDoc(doc(db, "sollicituds", id), { 
-      estat: "finalitzat", 
-      timestamp_retorn: serverTimestamp() 
-    });
+    window.forcarRetorn = (id) => {
+      updateDoc(doc(db, "sollicituds", id), { 
+        estat: "finalitzat", 
+        timestamp_retorn: serverTimestamp() 
+      });
+    };
   </script>
 </body>
 </html>
